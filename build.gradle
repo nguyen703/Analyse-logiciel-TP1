@@ -1,0 +1,59 @@
+plugins {
+    id 'java'
+    id 'application' // allows ./gradlew run
+    id 'org.openjfx.javafxplugin' version '0.1.0'
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+javafx {
+    version = "21.0.3"
+    modules = [ 'javafx.controls', 'javafx.graphics' ]
+}
+
+group = 'com.hnguyen703'
+version = '1.0-SNAPSHOT'
+
+def javafxVersion = '21.0.3'
+def osName = System.getProperty("os.name").toLowerCase()
+def arch   = System.getProperty("os.arch").toLowerCase()
+def platform =
+        (osName.contains("mac"))    ? (arch.contains("aarch64") || arch.contains("arm") ? "mac-aarch64" : "mac") :
+                (osName.contains("win"))    ? "win" :
+                        "linux"
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // Eclipse JDT Core
+    implementation 'org.eclipse.jdt:org.eclipse.jdt.core:3.40.0'
+    implementation 'commons-io:commons-io:2.14.0'
+
+    implementation "org.openjfx:javafx-controls:${javafxVersion}"
+    implementation "org.openjfx:javafx-graphics:${javafxVersion}"
+
+    // Natives/runtime pour ta plateforme
+    runtimeOnly   "org.openjfx:javafx-controls:${javafxVersion}:${platform}"
+    runtimeOnly   "org.openjfx:javafx-graphics:${javafxVersion}:${platform}"
+}
+
+application {
+//    mainClass = 'com.hnguyen703.Analyzer'
+    mainClass = 'com.hnguyen703.AnalyzerUI'
+}
+
+run {
+    jvmArgs = [
+            '--module-path', configurations.runtimeClasspath.asPath,
+            '--add-modules', 'javafx.controls,javafx.graphics'
+    ]
+}
+
+tasks.test {
+    useJUnitPlatform()
+}
