@@ -24,6 +24,12 @@ public class Analyzer {
     private final Map<String, Integer> attributesPerClass = new HashMap<>();
     private final Map<String, Integer> linesPerMethod = new HashMap<>();
 
+    private final Map<String, Set<String>> callGraph = new HashMap<>();
+    public Map<String, Set<String>> getCallGraph() {
+        return callGraph;
+    }
+
+
     public void analyze(String projectPath) throws IOException {
         analyze(projectPath, true);
     }
@@ -39,6 +45,7 @@ public class Analyzer {
         methodsPerClass.clear();
         attributesPerClass.clear();
         linesPerMethod.clear();
+        callGraph.clear();
 
         try (var pathStream = Files.walk(Paths.get(projectPath))) {
             pathStream
@@ -164,6 +171,19 @@ public class Analyzer {
                 int nbAttrs = varVisitor.getVariables().size();
                 attributesPerClass.put(className, nbAttrs);
                 attributeCount += nbAttrs;
+
+                for (MethodDeclaration m : methodVisitor.getMethods()) {
+                    String methodName = className + "." + m.getName();
+                    MethodInvocationVisitor invVisitor = new MethodInvocationVisitor();
+                    invVisitor.setCurrentMethod(methodName);
+                    m.accept(invVisitor);
+
+                    // Ajouter au graphe global
+                    Map<String, Set<String>> localGraph = invVisitor.getCallGraph();
+                    for (var entry : localGraph.entrySet()) {
+                        callGraph.computeIfAbsent(entry.getKey(), k -> new HashSet<>()).addAll(entry.getValue());
+                    }
+                }
             }
 
         } catch (IOException e) {

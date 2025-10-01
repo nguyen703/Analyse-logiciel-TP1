@@ -21,8 +21,8 @@ def javafxVersion = '21.0.3'
 def osName = System.getProperty("os.name").toLowerCase()
 def arch   = System.getProperty("os.arch").toLowerCase()
 def platform =
-        (osName.contains("mac"))    ? (arch.contains("aarch64") || arch.contains("arm") ? "mac-aarch64" : "mac") :
-                (osName.contains("win"))    ? "win" :
+        (osName.contains("mac")) ? (arch.contains("aarch64") || arch.contains("arm") ? "mac-aarch64" : "mac") :
+                (osName.contains("win")) ? "win" :
                         "linux"
 
 repositories {
@@ -36,6 +36,10 @@ dependencies {
 
     implementation "org.openjfx:javafx-controls:${javafxVersion}"
     implementation "org.openjfx:javafx-graphics:${javafxVersion}"
+    implementation "org.openjfx:javafx-fxml:${javafxVersion}"
+
+    implementation "org.graphstream:gs-core:2.0"
+    implementation "org.graphstream:gs-ui-javafx:2.0"
 
     // Natives/runtime pour ta plateforme
     runtimeOnly   "org.openjfx:javafx-controls:${javafxVersion}:${platform}"
@@ -43,7 +47,6 @@ dependencies {
 }
 
 application {
-//    mainClass = 'com.hnguyen703.Analyzer'
     mainClass = 'com.hnguyen703.AnalyzerUI'
 }
 

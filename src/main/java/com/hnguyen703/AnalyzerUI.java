@@ -13,6 +13,10 @@ import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.Stage;
+import org.graphstream.graph.Graph;
+import org.graphstream.graph.implementations.SingleGraph;
+import org.graphstream.ui.fx_viewer.FxViewPanel;
+import org.graphstream.ui.fx_viewer.FxViewer;
 
 import java.io.File;
 import java.util.*;
@@ -36,6 +40,15 @@ public class AnalyzerUI extends Application {
 
     // Loading indicator
     private final ProgressIndicator loadingIndicator = new ProgressIndicator();
+
+    // Call graph tab
+    private Tab tabGraph;  // field in AnalyzerUI
+
+    private Analyzer currentAnalyzer; // Add this field
+
+    private Analyzer getCurrentAnalyzer() {
+        return currentAnalyzer;
+    }
 
     @Override
     public void start(Stage stage) {
@@ -88,6 +101,26 @@ public class AnalyzerUI extends Application {
         });
 
         runBtn.setOnAction(ev -> analyzeAndRender(pathField.getText()));
+
+        // Onglet 1 : Statistiques
+        VBox statsRoot = new VBox(10, top, new Separator(), summary,
+                new Label("Classes (méthodes / attributs)"), tblClasses,
+                new Label("Top 10% méthodes (par LOC)"), tblMethods);
+        statsRoot.setPadding(new Insets(10));
+        Tab tabStats = new Tab("Statistiques", statsRoot);
+        tabStats.setClosable(false);
+
+        // Onglet 2 : Call Graph
+        tabGraph = new Tab("Call Graph", buildCallGraphView());
+        tabGraph.setClosable(false);
+
+        // TabPane principal
+        TabPane tabs = new TabPane(tabStats, tabGraph);
+
+        Scene sc = new Scene(tabs, 1000, 700);
+        stage.setScene(sc);
+        stage.setTitle("Analyseur de code Java");
+        stage.show();
     }
 
     private void setupTables() {
@@ -129,6 +162,7 @@ public class AnalyzerUI extends Application {
                 try {
                     Analyzer a = new Analyzer();
                     a.analyze(projectPath, false);
+                    currentAnalyzer = a;
 
                     // Résumé
                     Platform.runLater(() -> {
@@ -160,6 +194,9 @@ public class AnalyzerUI extends Application {
                                 .collect(Collectors.toList());
                         tblMethods.setItems(FXCollections.observableArrayList(methodRows));
 
+                        // Update Call Graph tab
+                        tabGraph.setContent(buildCallGraphView());
+
                         loadingIndicator.setVisible(false);
                     });
                 } catch (Exception ex) {
@@ -186,6 +223,35 @@ public class AnalyzerUI extends Application {
         public final String qualifiedName;
         public final int loc;
         public MethodStat(String n, int l) { this.qualifiedName = n; this.loc = l; }
+    }
+
+    private Pane buildCallGraphView() {
+        Analyzer a = getCurrentAnalyzer();
+        Map<String, Set<String>> callGraph = (a != null) ? a.getCallGraph() : Map.of();
+
+        Graph graph = new SingleGraph("CallGraph");
+
+        for (String caller : callGraph.keySet()) {
+            if (graph.getNode(caller) == null)
+                graph.addNode(caller).setAttribute("ui.label", caller);
+            for (String callee : callGraph.get(caller)) {
+                if (graph.getNode(callee) == null)
+                    graph.addNode(callee).setAttribute("ui.label", callee);
+                String edgeId = caller + "->" + callee;
+                if (graph.getEdge(edgeId) == null)
+                    graph.addEdge(edgeId, caller, callee, true);
+            }
+        }
+
+        graph.setAttribute("ui.stylesheet",
+                "node { fill-color: lightblue; size: 20px; text-size: 12px; text-alignment: at-right; }" +
+                        "edge { arrow-shape: arrow; }");
+
+        FxViewer viewer = new FxViewer(graph, FxViewer.ThreadingModel.GRAPH_IN_GUI_THREAD);
+        viewer.enableAutoLayout();
+        FxViewPanel panel = (FxViewPanel) viewer.addDefaultView(false);
+
+        return new StackPane(panel);
     }
 
     public static void main(String[] args) {

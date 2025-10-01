@@ -1,32 +1,41 @@
 package com.hnguyen703;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 
 import org.eclipse.jdt.core.dom.ASTVisitor;
+import org.eclipse.jdt.core.dom.ITypeBinding;
 import org.eclipse.jdt.core.dom.MethodInvocation;
-import org.eclipse.jdt.core.dom.SuperMethodInvocation;
 
 public class MethodInvocationVisitor extends ASTVisitor {
-	List<MethodInvocation> methods = new ArrayList<MethodInvocation>();
-	List<SuperMethodInvocation> superMethods = new ArrayList<SuperMethodInvocation>();
-	public boolean visit(MethodInvocation node) {
-		methods.add(node);
-		return super.visit(node);
-	}
-	
-	@Override
-	public boolean visit(SuperMethodInvocation node) {
-		superMethods.add(node);
-		return super.visit(node);
-	}
+    private final Map<String, Set<String>> callGraph = new HashMap<>();
+    private String currentMethod;
 
-	
-	public List<MethodInvocation> getMethods() {
-		return methods;
-	}
-	
-	public List<SuperMethodInvocation> getSuperMethod() {
-		return superMethods;
-	}
+    public void setCurrentMethod(String methodName) {
+        this.currentMethod = methodName;
+    }
+
+    @Override
+    public boolean visit(MethodInvocation node) {
+        if (currentMethod != null) {
+            String calleeName = node.getName().toString();
+            String receiverType = "Unknown";
+            if (node.getExpression() != null) {
+                ITypeBinding binding = node.getExpression().resolveTypeBinding();
+                if (binding != null) {
+                    receiverType = binding.getQualifiedName();
+                }
+            }
+            String qualifiedCallee = calleeName + " : " + receiverType;
+
+            callGraph.computeIfAbsent(currentMethod, k -> new HashSet<>()).add(qualifiedCallee);
+        }
+        return super.visit(node);
+    }
+
+    public Map<String, Set<String>> getCallGraph() {
+        return callGraph;
+    }
 }
