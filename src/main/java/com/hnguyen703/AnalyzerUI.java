@@ -1,4 +1,4 @@
-package com.hnguyen703.ui;
+package com.hnguyen703;
 
 import com.hnguyen703.analyzer.Analyzer;
 import com.hnguyen703.ui.components.CallGraphView;

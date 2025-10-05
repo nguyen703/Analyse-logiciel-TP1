@@ -41,13 +41,12 @@ dependencies {
     implementation "org.graphstream:gs-core:2.0"
     implementation "org.graphstream:gs-ui-javafx:2.0"
 
-    // Natives/runtime pour ta plateforme
     runtimeOnly   "org.openjfx:javafx-controls:${javafxVersion}:${platform}"
     runtimeOnly   "org.openjfx:javafx-graphics:${javafxVersion}:${platform}"
 }
 
 application {
-    mainClass = 'com.hnguyen703.ui.AnalyzerUI'
+    mainClass = 'com.hnguyen703.AnalyzerUI'
 }
 
 run {
