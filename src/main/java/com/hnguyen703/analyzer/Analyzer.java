@@ -1,7 +1,11 @@
-package com.hnguyen703;
+package com.hnguyen703.analyzer;
 
 import java.util.stream.Collectors;
 
+import com.hnguyen703.analyzer.visitors.MethodDeclarationVisitor;
+import com.hnguyen703.analyzer.visitors.MethodInvocationVisitor;
+import com.hnguyen703.analyzer.visitors.TypeDeclarationVisitor;
+import com.hnguyen703.analyzer.visitors.VariableDeclarationFragmentVisitor;
 import org.eclipse.jdt.core.dom.*;
 
 import java.io.File;

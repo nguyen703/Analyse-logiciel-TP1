@@ -1,4 +1,4 @@
-package com.hnguyen703;
+package com.hnguyen703.analyzer.visitors;
 
 import java.util.ArrayList;
 import java.util.List;

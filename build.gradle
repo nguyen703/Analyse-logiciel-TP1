@@ -47,7 +47,7 @@ dependencies {
 }
 
 application {
-    mainClass = 'com.hnguyen703.AnalyzerUI'
+    mainClass = 'com.hnguyen703.ui.AnalyzerUI'
 }
 
 run {
