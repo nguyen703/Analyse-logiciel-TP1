@@ -32,7 +32,12 @@ public class AnalyzerUI extends Application {
     // Loading indicator
     private final ProgressIndicator loadingIndicator = new ProgressIndicator();
 
-    private Analyzer currentAnalyzer;
+    @Override
+    public void stop() throws Exception {
+        super.stop();
+        Platform.exit();
+        System.exit(0);
+    }
 
     @Override
     public void start(Stage stage) {
@@ -96,7 +101,6 @@ public class AnalyzerUI extends Application {
                 try {
                     Analyzer analyzer = new Analyzer();
                     analyzer.analyze(projectPath, false);
-                    currentAnalyzer = analyzer;
 
                     Platform.runLater(() -> {
                         updateUI(analyzer);
