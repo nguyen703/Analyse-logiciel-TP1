@@ -17,7 +17,8 @@ public class Constants {
     // Tab Names
     public static final String STATISTICS_TAB = "Statistiques";
     public static final String CALL_GRAPH_TAB = "Call Graph";
-    
+    public static final String COUPLING_GRAPH_TAB = "Graphe de Couplage";
+
     // Summary Labels
     public static final String TOTAL_CLASSES_LABEL = "Classes totales:";
     public static final String TOTAL_LOC_LABEL = "Lignes de code totales:";

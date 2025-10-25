@@ -2,6 +2,7 @@ package com.hnguyen703;
 
 import com.hnguyen703.analyzer.Analyzer;
 import com.hnguyen703.ui.components.CallGraphView;
+import com.hnguyen703.ui.components.CouplingGraphView;
 import com.hnguyen703.ui.components.StatisticsView;
 import com.hnguyen703.ui.components.SummaryPanel;
 import com.hnguyen703.ui.models.ClassStat;
@@ -28,6 +29,7 @@ public class AnalyzerUI extends Application {
     private final SummaryPanel summaryPanel = new SummaryPanel();
     private final StatisticsView statisticsView = new StatisticsView();
     private final CallGraphView callGraphView = new CallGraphView();
+    private final CouplingGraphView couplingGraphView = new CouplingGraphView();
 
     // Loading indicator
     private final ProgressIndicator loadingIndicator = new ProgressIndicator();
@@ -78,8 +80,14 @@ public class AnalyzerUI extends Application {
         Tab tabGraph = new Tab(Constants.CALL_GRAPH_TAB, graphRoot);
         tabGraph.setClosable(false);
 
+        // Onglet 3 : Coupling Graph
+        VBox couplingRoot = new VBox(10, new Label("Graphe de couplage pondéré entre les classes"), couplingGraphView);
+        couplingRoot.setPadding(new Insets(10));
+        Tab tabCoupling = new Tab(Constants.COUPLING_GRAPH_TAB, couplingRoot);
+        tabCoupling.setClosable(false);
+
         // TabPane principal
-        TabPane tabs = new TabPane(tabStats, tabGraph);
+        TabPane tabs = new TabPane(tabStats, tabGraph, tabCoupling);
 
         Scene scene = new Scene(tabs, Constants.APP_WIDTH, Constants.APP_HEIGHT);
         stage.setScene(scene);
@@ -97,10 +105,10 @@ public class AnalyzerUI extends Application {
 
         Task<Void> task = new Task<>() {
             @Override
-            protected Void call() throws Exception {
+            protected Void call() {
                 try {
                     Analyzer analyzer = new Analyzer();
-                    analyzer.analyze(projectPath, false);
+                    analyzer.analyze(projectPath, true);
 
                     Platform.runLater(() -> {
                         updateUI(analyzer);
@@ -134,6 +142,10 @@ public class AnalyzerUI extends Application {
 
         // Update call graph
         callGraphView.updateCallGraph(analyzer.getCallGraph());
+
+        // Update coupling graph
+        Map<String, Map<String, Double>> couplingMatrix = analyzer.generateCouplingGraph();
+        couplingGraphView.updateCouplingGraph(couplingMatrix);
     }
 
     private void updateStatisticsView(Analyzer analyzer) {
@@ -165,6 +177,7 @@ public class AnalyzerUI extends Application {
         statisticsView.updateMethodsData(methodStats);
     }
 
+    @SuppressWarnings("unused")
     public static void main(String[] args) {
         launch(args);
     }

@@ -124,7 +124,203 @@ public class Analyzer {
 
         // ---- 13. Nombre max de paramètres ----
         System.out.println("13. Nombre maximal de paramètres par méthode: " + maxParams);
+
+        // Generate and display coupling graph
+        System.out.println("\n=== Graphe de couplage pondéré ===");
+        Map<String, Map<String, Double>> couplingMatrix = generateCouplingGraph();
+        printCouplingGraph(couplingMatrix);
     }
+
+    public double calculateCoupling(String classA, String classB) {
+        // Calculate coupling between two classes A and B
+        // Couplage(A,B) = Relations between A and B / Total relations in the application
+
+        int relationsBetweenAB = getRelationsBetweenAB(classA, classB);
+        int totalRelations = getTotalRelations();
+
+        if (totalRelations == 0) {
+            return 0.0;
+        }
+
+        return (double) relationsBetweenAB / totalRelations;
+    }
+
+    /**
+     * Generate a weighted coupling graph for all classes in the application
+     * Returns a matrix where matrix[classA][classB] = coupling weight between classA and classB
+     */
+    public Map<String, Map<String, Double>> generateCouplingGraph() {
+        Map<String, Map<String, Double>> couplingMatrix = new HashMap<>();
+
+        // Get all unique class names
+        Set<String> allClasses = getAllClasses();
+
+        // Calculate coupling for each pair of classes
+        for (String classA : allClasses) {
+            Map<String, Double> couplings = new HashMap<>();
+
+            for (String classB : allClasses) {
+                if (!classA.equals(classB)) {
+                    double coupling = calculateCoupling(classA, classB);
+                    if (coupling > 0.0) {
+                        couplings.put(classB, coupling);
+                    }
+                }
+            }
+
+            if (!couplings.isEmpty()) {
+                couplingMatrix.put(classA, couplings);
+            }
+        }
+
+        return couplingMatrix;
+    }
+
+    /**
+     * Get all unique class names from the analyzed project
+     * Only includes classes that are actually defined in the project (not external classes)
+     */
+    private Set<String> getAllClasses() {
+        Set<String> classes = new HashSet<>();
+
+        // Only add classes that are defined in the analyzed project
+        // These are classes that appear in methodsPerClass or attributesPerClass
+        classes.addAll(methodsPerClass.keySet());
+        classes.addAll(attributesPerClass.keySet());
+
+
+        return classes;
+    }
+
+    /**
+     * Print the coupling graph in a readable format
+     */
+    private void printCouplingGraph(Map<String, Map<String, Double>> couplingMatrix) {
+        if (couplingMatrix.isEmpty()) {
+            System.out.println("Aucun couplage détecté entre les classes.");
+            return;
+        }
+
+        System.out.println("Format: Classe A <-> Classe B : Poids de couplage (pourcentage)\n");
+
+        // Sort by class name for consistent output
+        List<String> sortedClasses = new ArrayList<>(couplingMatrix.keySet());
+        Collections.sort(sortedClasses);
+
+        int totalEdges = 0;
+        for (String classA : sortedClasses) {
+            Map<String, Double> couplings = couplingMatrix.get(classA);
+
+            // Sort couplings by weight (descending)
+            List<Map.Entry<String, Double>> sortedCouplings = new ArrayList<>(couplings.entrySet());
+            sortedCouplings.sort((a, b) -> Double.compare(b.getValue(), a.getValue()));
+
+            for (Map.Entry<String, Double> entry : sortedCouplings) {
+                String classB = entry.getKey();
+                double weight = entry.getValue();
+
+                // Print coupling with percentage
+                System.out.printf("  %s <-> %s : %.4f (%.2f%%)\n",
+                    classA, classB, weight, weight * 100);
+                totalEdges++;
+            }
+        }
+
+        System.out.println("\nNombre total de relations de couplage: " + totalEdges);
+        System.out.println("Nombre de classes avec couplage: " + couplingMatrix.size());
+    }
+
+    private int getRelationsBetweenAB(String classA, String classB) {
+        // Count relations (method calls) between classes A and B
+        // A relation exists when a method in class A calls a method in class B
+        // or when a method in class B calls a method in class A
+
+        int count = 0;
+
+        // Get all project-defined classes
+        Set<String> projectClasses = getAllClasses();
+
+        for (Map.Entry<String, Set<String>> entry : callGraph.entrySet()) {
+            String caller = entry.getKey(); // Format: ClassName.methodName
+            String callerClass = extractClassName(caller);
+
+            for (String callee : entry.getValue()) {
+                String calleeClass = extractClassName(callee);
+
+                // Only count if both classes are defined in the project
+                if (!projectClasses.contains(callerClass) || !projectClasses.contains(calleeClass)) {
+                    continue;
+                }
+
+                // Check if this is a relation between A and B (in either direction)
+                if ((callerClass.equals(classA) && calleeClass.equals(classB)) ||
+                    (callerClass.equals(classB) && calleeClass.equals(classA))) {
+                    count++;
+                }
+            }
+        }
+
+        return count;
+    }
+
+    private int getTotalRelations() {
+        // Count all relations (method calls) in the application
+        // Each entry in callGraph represents relations from one method
+        // Only count relations between classes defined in the project
+
+        int total = 0;
+
+        // Get all project-defined classes
+        Set<String> projectClasses = getAllClasses();
+
+        for (Map.Entry<String, Set<String>> entry : callGraph.entrySet()) {
+            String caller = entry.getKey();
+            String callerClass = extractClassName(caller);
+
+            // Skip if caller is not a project class
+            if (!projectClasses.contains(callerClass)) {
+                continue;
+            }
+
+            for (String callee : entry.getValue()) {
+                String calleeClass = extractClassName(callee);
+
+                // Only count relations between different project classes
+                if (!callerClass.equals(calleeClass) && projectClasses.contains(calleeClass)) {
+                    total++;
+                }
+            }
+        }
+
+        return total;
+    }
+
+    private String extractClassName(String methodSignature) {
+        // Extract class name from method signature (format: ClassName.methodName)
+        if (methodSignature == null || !methodSignature.contains(".")) {
+            return "";
+        }
+
+        int lastDotIndex = methodSignature.lastIndexOf(".");
+        String className = methodSignature.substring(0, lastDotIndex);
+
+        // Handle cases where the method invocation includes object references
+        // e.g., "testRunner.run" -> extract the last component before the method
+        if (className.contains(".")) {
+            int secondLastDot = className.lastIndexOf(".");
+            className = className.substring(secondLastDot + 1);
+        }
+
+        // Capitalize first letter if needed (for consistency)
+        if (!className.isEmpty() && Character.isLowerCase(className.charAt(0))) {
+            // This might be an instance variable, try to infer class name
+            // For simple cases, capitalize it
+            className = Character.toUpperCase(className.charAt(0)) + className.substring(1);
+        }
+
+        return className;
+    }
+
 
     private void parseFile(File file) {
         try {
