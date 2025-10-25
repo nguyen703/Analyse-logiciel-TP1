@@ -34,6 +34,8 @@ dependencies {
     implementation 'org.eclipse.jdt:org.eclipse.jdt.core:3.40.0'
     implementation 'commons-io:commons-io:2.14.0'
 
+    implementation 'fr.inria.gforge.spoon:spoon-core:11.2.0'
+
     implementation "org.openjfx:javafx-controls:${javafxVersion}"
     implementation "org.openjfx:javafx-graphics:${javafxVersion}"
     implementation "org.openjfx:javafx-fxml:${javafxVersion}"
@@ -43,10 +45,11 @@ dependencies {
 
     runtimeOnly   "org.openjfx:javafx-controls:${javafxVersion}:${platform}"
     runtimeOnly   "org.openjfx:javafx-graphics:${javafxVersion}:${platform}"
+    runtimeOnly   "org.slf4j:slf4j-simple:2.0.13"
 }
 
 application {
-    mainClass = 'com.hnguyen703.AnalyzerUI'
+    mainClass = 'com.hnguyen703.AnalyzerSpoonUI'
 }
 
 run {
@@ -59,3 +62,4 @@ run {
 tasks.test {
     useJUnitPlatform()
 }
+

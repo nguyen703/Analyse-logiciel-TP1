@@ -27,6 +27,7 @@ public class Analyzer {
     private final Map<String, Integer> methodsPerClass = new HashMap<>();
     private final Map<String, Integer> attributesPerClass = new HashMap<>();
     private final Map<String, Integer> linesPerMethod = new HashMap<>();
+    private Map<String, Map<String, Double>> couplingMatrix;
 
     private final Map<String, Set<String>> callGraph = new HashMap<>();
     public Map<String, Set<String>> getCallGraph() {
@@ -36,6 +37,42 @@ public class Analyzer {
 
     public void analyze(String projectPath) throws IOException {
         analyze(projectPath, true);
+    }
+
+    public static class ClusterNode {
+        String name;
+        Set<String> classes; // The classes in this cluster
+        ClusterNode leftChild;
+        ClusterNode rightChild;
+        double mergeCoupling; // The coupling value when this node was formed
+
+        // Constructor for a leaf (single class)
+        public ClusterNode(String className) {
+            this.name = className;
+            this.classes = new HashSet<>();
+            this.classes.add(className);
+            this.leftChild = null;
+            this.rightChild = null;
+            this.mergeCoupling = 0.0;
+        }
+
+        // Constructor for a merged cluster
+        public ClusterNode(ClusterNode c1, ClusterNode c2, double mergeCoupling) {
+            this.name = "(" + c1.name + ", " + c2.name + ")";
+            this.classes = new HashSet<>(c1.classes);
+            this.classes.addAll(c2.classes);
+            this.leftChild = c1;
+            this.rightChild = c2;
+            this.mergeCoupling = mergeCoupling;
+        }
+
+        public Set<String> getClasses() {
+            return classes;
+        }
+
+        public String getName() {
+            return name;
+        }
     }
 
     public void analyze(String projectPath, boolean printResults) throws IOException {
@@ -50,6 +87,7 @@ public class Analyzer {
         attributesPerClass.clear();
         linesPerMethod.clear();
         callGraph.clear();
+        couplingMatrix = null;
 
         try (var pathStream = Files.walk(Paths.get(projectPath))) {
             pathStream
@@ -57,9 +95,16 @@ public class Analyzer {
                     .forEach(file -> parseFile(file.toFile()));
         }
 
+        this.couplingMatrix = generateCouplingGraphInternal();
+
         if (printResults) {
             printResults();
         }
+
+
+        double CP_THRESHOLD = 0.05; // Example threshold: 5%
+        String clusteringResults = runClusteringAnalysis(CP_THRESHOLD);
+        System.out.println(clusteringResults);
     }
 
     private void printResults() {
@@ -129,6 +174,10 @@ public class Analyzer {
         System.out.println("\n=== Graphe de couplage pondéré ===");
         Map<String, Map<String, Double>> couplingMatrix = generateCouplingGraph();
         printCouplingGraph(couplingMatrix);
+
+        System.out.println("\n=== Graphe de couplage pondéré ===");
+        // Use the cached matrix instead of regenerating
+        printCouplingGraph(this.couplingMatrix);
     }
 
     public double calculateCoupling(String classA, String classB) {
@@ -146,11 +195,22 @@ public class Analyzer {
     }
 
     /**
-     * Generate a weighted coupling graph for all classes in the application
-     * Returns a matrix where matrix[classA][classB] = coupling weight between classA and classB
+     * Public method for the UI to get the coupling graph.
+     * Uses the cached matrix.
      */
     public Map<String, Map<String, Double>> generateCouplingGraph() {
-        Map<String, Map<String, Double>> couplingMatrix = new HashMap<>();
+        if (this.couplingMatrix == null) {
+            // This ensures it can be called even if analyze() wasn't (e.g., testing)
+            this.couplingMatrix = generateCouplingGraphInternal();
+        }
+        return this.couplingMatrix;
+    }
+
+    /**
+     * Internal method to actually build the matrix.
+     */
+    private Map<String, Map<String, Double>> generateCouplingGraphInternal() {
+        Map<String, Map<String, Double>> matrix = new HashMap<>();
 
         // Get all unique class names
         Set<String> allClasses = getAllClasses();
@@ -169,11 +229,11 @@ public class Analyzer {
             }
 
             if (!couplings.isEmpty()) {
-                couplingMatrix.put(classA, couplings);
+                matrix.put(classA, couplings);
             }
         }
 
-        return couplingMatrix;
+        return matrix;
     }
 
     /**
@@ -389,6 +449,216 @@ public class Analyzer {
         } catch (IOException e) {
             System.out.println("Erreur de lecture du fichier: " + file.getPath());
         }
+    }
+
+    // ========================================================================
+    // --- EXERCICE 2 - PART 1: HIERARCHICAL CLUSTERING ---
+    // ========================================================================
+
+    public ClusterNode buildDendrogram() {
+        if (couplingMatrix == null) {
+            this.couplingMatrix = generateCouplingGraphInternal();
+        }
+
+        // 1. Initialize clusters (one for each class)
+        List<ClusterNode> activeClusters = new ArrayList<>();
+        for (String className : getAllClasses()) {
+            activeClusters.add(new ClusterNode(className));
+        }
+
+        // 2. Loop until only one cluster remains
+        while (activeClusters.size() > 1) {
+            ClusterNode c1 = null;
+            ClusterNode c2 = null;
+            double maxCoupling = -1.0;
+
+            // Find the two "closest" (most coupled) clusters
+            for (int i = 0; i < activeClusters.size(); i++) {
+                for (int j = i + 1; j < activeClusters.size(); j++) {
+                    ClusterNode clusterA = activeClusters.get(i);
+                    ClusterNode clusterB = activeClusters.get(j);
+
+                    // Use average-linkage coupling
+                    double currentCoupling = calculateClusterCoupling(clusterA, clusterB);
+
+                    if (currentCoupling > maxCoupling) {
+                        maxCoupling = currentCoupling;
+                        c1 = clusterA;
+                        c2 = clusterB;
+                    }
+                }
+            }
+
+            if (c1 == null || maxCoupling <= 0) {
+                // No more positive coupling found, stop merging
+                break;
+            }
+
+            // 3. Merge them
+            ClusterNode merged = new ClusterNode(c1, c2, maxCoupling);
+
+            // 4. Remove old clusters, add the new merged cluster
+            activeClusters.remove(c1);
+            activeClusters.remove(c2);
+            activeClusters.add(merged);
+        }
+
+        // 5. Return the root of the dendrogram
+        // If multiple roots remain (due to no coupling), create a virtual root
+        if (activeClusters.size() > 1) {
+            ClusterNode virtualRoot = new ClusterNode(activeClusters.get(0), activeClusters.get(1), 0.0);
+            for(int i = 2; i < activeClusters.size(); i++) {
+                virtualRoot = new ClusterNode(virtualRoot, activeClusters.get(i), 0.0);
+            }
+            return virtualRoot;
+        }
+
+        return activeClusters.isEmpty() ? null : activeClusters.get(0);
+    }
+
+    /**
+     * Calculates the average-linkage coupling between two clusters.
+     */
+    private double calculateClusterCoupling(ClusterNode clusterA, ClusterNode clusterB) {
+        if (this.couplingMatrix == null) return 0.0;
+
+        double totalCoupling = 0;
+        int pairCount = 0;
+
+        for (String classA : clusterA.classes) {
+            for (String classB : clusterB.classes) {
+                double coupling = 0.0;
+
+                // Check A -> B
+                if (couplingMatrix.containsKey(classA) && couplingMatrix.get(classA).containsKey(classB)) {
+                    coupling = couplingMatrix.get(classA).get(classB);
+                }
+                // Check B -> A (since matrix might be symmetrical)
+                else if (couplingMatrix.containsKey(classB) && couplingMatrix.get(classB).containsKey(classA)) {
+                    coupling = couplingMatrix.get(classB).get(classA);
+                }
+
+                totalCoupling += coupling;
+                pairCount++;
+            }
+        }
+
+        return (pairCount == 0) ? 0.0 : totalCoupling / pairCount;
+    }
+
+
+    // ========================================================================
+    // --- EXERCICE 2 - PART 2: MODULE IDENTIFICATION ---
+    // ========================================================================
+
+    /**
+     * Calculates the average coupling *within* a single cluster.
+     * Required for the CP threshold check.
+     */
+    public double calculateInternalCoupling(ClusterNode cluster) {
+        if (cluster.classes.size() < 2) {
+            return 0.0; // No internal coupling possible
+        }
+        if (this.couplingMatrix == null) return 0.0;
+
+        double totalCoupling = 0;
+        int pairCount = 0;
+        List<String> classList = new ArrayList<>(cluster.classes);
+
+        for (int i = 0; i < classList.size(); i++) {
+            for (int j = i + 1; j < classList.size(); j++) {
+                String classA = classList.get(i);
+                String classB = classList.get(j);
+
+                double coupling = 0.0;
+                if (couplingMatrix.containsKey(classA) && couplingMatrix.get(classA).containsKey(classB)) {
+                    coupling = couplingMatrix.get(classA).get(classB);
+                } else if (couplingMatrix.containsKey(classB) && couplingMatrix.get(classB).containsKey(classA)) {
+                    coupling = couplingMatrix.get(classB).get(classA);
+                }
+
+                totalCoupling += coupling;
+                pairCount++;
+            }
+        }
+
+        return (pairCount == 0) ? 0.0 : totalCoupling / pairCount;
+    }
+
+    /**
+     * Identifies modules based on the dendrogram and rules.
+     */
+    public List<ClusterNode> identifyModules(ClusterNode dendrogramRoot, double CP, int M) {
+        List<ClusterNode> modules = new ArrayList<>();
+        int maxModules = M / 2; // Rule: max M/2 modules
+
+        findModulesRecursive(dendrogramRoot, CP, maxModules, modules);
+
+        return modules;
+    }
+
+    /**
+     * Recursive helper to find modules.
+     */
+    private void findModulesRecursive(ClusterNode node, double CP, int maxModules, List<ClusterNode> modules) {
+        // Stop if node is null (leaf) or module limit is hit
+        if (node == null || modules.size() >= maxModules) {
+            return;
+        }
+
+        // Stop if this is a leaf node (single class)
+        if (node.leftChild == null && node.rightChild == null) {
+            return;
+        }
+
+        // Rule: Average internal coupling must be > CP
+        double internalCoupling = calculateInternalCoupling(node);
+
+        if (internalCoupling > CP) {
+            // This node is a cohesive module. Add it and STOP traversing this branch.
+            // This respects the "single branch" rule.
+            modules.add(node);
+        } else {
+            // This node is not cohesive enough. Check its children.
+            findModulesRecursive(node.leftChild, CP, maxModules, modules);
+            findModulesRecursive(node.rightChild, CP, maxModules, modules);
+        }
+    }
+
+    /**
+     * Public method to run the clustering analysis and return results as a String.
+     * This can be called from the UI.
+     */
+    public String runClusteringAnalysis(double couplingThreshold) {
+        StringBuilder output = new StringBuilder();
+        output.append("=== Analyse de Clustering Hiérarchique ===\n\n");
+
+        ClusterNode dendroRoot = buildDendrogram();
+
+        if (dendroRoot == null) {
+            output.append("Impossible de construire le dendrogramme.\n");
+            return output.toString();
+        }
+
+        output.append("Dendrogramme construit.\n");
+        output.append("Racine: ").append(dendroRoot.name).append("\n");
+
+        int M = getAllClasses().size(); // Total number of classes
+        List<ClusterNode> modules = identifyModules(dendroRoot, couplingThreshold, M);
+
+        output.append("\n=== Modules Identifiés (Couplage Interne > ").append(String.format("%.4f", couplingThreshold)).append(") ===\n");
+        output.append("Nombre total de classes (M): ").append(M).append("\n");
+        output.append("Limite de modules (M/2): ").append(M/2).append("\n");
+        output.append("Nombre de modules trouvés: ").append(modules.size()).append("\n");
+
+        int i = 1;
+        for (ClusterNode module : modules) {
+            output.append("\nModule ").append(i).append(": (Couplage Interne: ").append(String.format("%.4f", calculateInternalCoupling(module))).append(")\n");
+            output.append("  - Classes: ").append(module.classes).append("\n");
+            i++;
+        }
+
+        return output.toString();
     }
 
     // Main
